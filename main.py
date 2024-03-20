@@ -65,7 +65,7 @@ if __name__ == '__main__':
                       goal_point[0], goal_point[1], goal_point[2],
                       500, consider_corners=False)
 
-    src = treeSearch(enqueueStrategyAstarDynamicWeighting(), problem, vis)
+    src = treeSearch(enqueueStrategyAstar(), problem, vis)
 
     sol = src.tree_search()
 

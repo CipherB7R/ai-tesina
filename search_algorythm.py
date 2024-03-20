@@ -28,14 +28,21 @@ class Action(Enum):
 
 class State:
     # Information about present position (X,Y,Z)
-    def __init__(self, x, y, h):
+    def __init__(self, x, y, h, pitch, yaw):
         self.x = x
         self.y = y
         self.h = h
+        self.pitch = pitch
+        self.yaw = yaw
 
     def __str__(self):
-        return f'({self.x, self.y, self.h})'
+        return f'({self.x, self.y, self.h}{self.pitch, self.yaw})'
 
+goal_state: State = State(0,0,0,0,0)
+def change_goal_state(goal_x, goal_y, goal_h):
+    goal_state.x = goal_x
+    goal_state.y = goal_y
+    goal_state.z = goal_h
 
 class Node:
 
@@ -47,7 +54,8 @@ class Node:
         self.depth = depth
 
     def __lt__(self, other):
-        return self.state.x < other.state.x and self.state.y < other.state.y and self.state.h < other.state.h
+        return point3DDistance(self.state.x, self.state.y, self.state.h, goal_state.x, goal_state.y, goal_state.h) < \
+            point3DDistance(other.state.x, other.state.y, other.state.h, goal_state.x, goal_state.y, goal_state.h)
 
     def solution(self):
         # Return the ordered list of all the parents of this node.
@@ -62,36 +70,45 @@ class Node:
     def __str__(self):
         return ('' if self.action is None else f'{self.action} --->') + str(self.state)
 
+def newMod(a,b):
+    res = a%b
+    return res if not res else res-b if a<0 else res
 
 class Problem:
     """Class that models the F-16 low altitude ride problem"""
     _TFR_PITCH_LIMIT_MAX = math.radians(40)  # 40 degrees in radians
-    _TRF_PITCH_LIMIT_MIN = math.radians(20)  # MINUS 20 degrees in radians
+    _TFR_PITCH_LIMIT_MIN = math.radians(20)  # MINUS 20 degrees in radians
 
 
     def __init__(self, terrain_mesh: o3d.geometry.TriangleMesh, starting_x, starting_y, starting_h, goal_x, goal_y,
-                 goal_h, altitude_limit, goal_distance=1000,
+                 goal_h, altitude_limit, goal_distance=100,
                  consider_corners=True,
                  pitch_limits=False,
                  starting_pitch=0,
                  starting_yaw=0,
-                 increment=250):
+                 increment=150):
         self.mesh = terrain_mesh
         self.mesh_legacy = o3d.t.geometry.TriangleMesh.from_legacy(self.mesh)
         self.scene = o3d.t.geometry.RaycastingScene()
         # self.mesh_id = \
         self.scene.add_triangles(self.mesh_legacy)
-
-        self.initial_state = State(starting_x, starting_y, starting_h)
+        self.initial_state = State(starting_x, starting_y, starting_h, starting_pitch, starting_yaw)
         self.goal_x = goal_x
         self.goal_y = goal_y
         self.goal_h = goal_h
+        change_goal_state(goal_x, goal_y, goal_h)
         self.altitude_limit = altitude_limit
         self.goal_distance = goal_distance
         self.consider_corners = consider_corners
+        self.pitch_limits = pitch_limits
         self.increment = increment
 
     def goal_test(self, state: State):
+        print(math.sqrt(
+            pow(state.x - self.goal_x, 2) +
+            pow(state.y - self.goal_y, 2)
+            # and state.h == self.goal_h
+        ))
         return math.sqrt(
             pow(state.x - self.goal_x, 2) +
             pow(state.y - self.goal_y, 2)
@@ -99,78 +116,64 @@ class Problem:
         ) <= self.goal_distance
 
     def successor_FN(self, state: State) -> set[tuple[State, Action]]:
-        # Starting from a definite state, we have a 3x3x3 cube of choices, where the central one is the current position
-        # the helicopter can go 150 in the x,y direction, while 10 in the h direction
+        # Starting from "state" (a tuple of coordinates) we can only pull 2G.
+        # By assuming a standard velocity of 300 knots (154 m/s) and doing some basic physics calculations by
+        # equating the centripetal acceleration to the maximum g amount, we obtain that the radius of the turn must be
+        #
+        #                           r <= 1208,7m
+        #
+        # Now, our state space is all the possible 3D points which are lower than
+        # a determined altitude (barometric) and that are inside the capability of the f-16 turn.
+        # We can consider just a fraction of those points, so we can consider a simplified grid.
+        #
+        # TODO: we will try with increments of 150m.
+        #
+        # Let's take into account that we need 3 points to draw a circle. In the 3D world, we need 3 points
+        # and a plane (identified by those 3 points). That circle, no matter what the plane ( of turn too ) we choose,
+        # will need to always have radius <= 1208,7m. Let's say we start the turn in the parent point, continue it in the
+        # present state and finish it on the next successor state: this gives us the three points we need to account for.
+        #
+        # TODO: to reduce the resolution over the X,Y and Z axis, note pulling 2Gs and displacing of 150m permits us
+        #  to gain a maximum of 11m in each direction. So, to further restrict the resolution over the z axis we can consider just
+        #  the case of pulling 2Gs or not pulling them. This gives us a Grid of 9 points after the current state, distant 150M
+        #  from the current state.
+        #
+        # Now note that we start with a vector in a given point, representing the yaw and pitch at that given point.
+        # At every 150m displace we need to consider a new direction, which can modify or not (go straight)
+        # the flight vector (pitch and yaw). Let's go!
         successorsSet = set()
 
         # --------------------------------------------------------------------------------------------
-        # Number 1, calculate a list of 26 (5 if self.consider_corners is false) possible displacements
+        # Number 1, calculate a list of 9 (5 if self.consider_corners is false) possible displacements
         # --------------------------------------------------------------------------------------------
-        successorsSet.add(
-            (
-                State(
-                    x=(state.x - self.increment),
-                    y=(state.y + 0),
-                    h=(state.h + 0)
-                ),
-                Action.FLY  # todo: write more expressive action
-            )
-        )
-
-        successorsSet.add(
-            (
-                State(
-                    x=(state.x + 0),
-                    y=(state.y - self.increment),
-                    h=(state.h + 0)
-                ),
-                Action.FLY  # todo: write more expressive action
-            )
-        )
-
-        successorsSet.add(
-            (
-                State(
-                    x=(state.x + self.increment),
-                    y=(state.y + 0),
-                    h=(state.h + 0)
-                ),
-                Action.FLY  # todo: write more expressive action
-            )
-        )
-
-        successorsSet.add(
-            (
-                State(
-                    x=(state.x + 0),
-                    y=(state.y + self.increment),
-                    h=(state.h + 0)
-                ),
-                Action.FLY  # todo: write more expressive action
-            )
-        )
-
-        successorsSet.add(
-            (
-                State(
-                    x=(state.x + 0),
-                    y=(state.y + 0),
-                    h=(state.h - 20)
-                ),
-                Action.FLY  # todo: write more expressive action
-            )
-        )
-
-        successorsSet.add(
-            (
-                State(
-                    x=(state.x + 0),
-                    y=(state.y + 0),
-                    h=(state.h + 20)
-                ),
-                Action.FLY  # todo: write more expressive action
-            )
-        )
+        # We gain 11m in each direction. We know that an increment of 11m in the y (or x, or z) axis, with r=150m,
+        # corresponds to degrees...
+        alpha = math.radians(30)
+        #alpha = math.atan(11/150)  # TODO: eliminate magic numbers by adding calculation of
+        #  max altitude by self.increment and self.max_g
+        # phi is the latitude [-pi/2; pi/2], while theta is the xy angle [0; 2pi[.
+        # They will modify, respectively, the pitch and yaw.
+        # 5 main directions, 4 corners.
+        for phi in [-alpha, 0, +alpha]:
+            for theta in [-alpha, 0, +alpha]:
+                if self.consider_corners is False:
+                    if abs(phi) == abs(alpha) and (-phi == theta or phi == theta):
+                        continue
+                    print(f'theta: {newMod((state.yaw + theta), 2*math.pi)}')
+                    new_pitch = newMod((state.pitch + phi), 2*math.pi) if (state.pitch + phi) >= 0 else (2*math.pi + (state.pitch + phi))
+                    new_yaw = newMod((state.yaw + theta), 2*math.pi) if(state.yaw + theta) >= 0 else (2*math.pi + (state.yaw + theta))
+                    successorsSet.add(
+                        (
+                            State(
+                                x=math.floor(state.x + self.increment * math.cos(new_pitch) * math.cos(new_yaw)),
+                                y=math.floor(state.y + self.increment * math.cos(new_pitch) * math.sin(new_yaw)),
+                                h=math.floor(state.h + self.increment * math.sin(new_pitch)),
+                                pitch=new_pitch,
+                                yaw=new_yaw
+                            ),
+                            Action.FLY  # todo: write more expressive action
+                        )
+                    )
 
         # --------------------------------------------------------------------------------------------
         # Number 2, delete all those that don't respect the altitude limits
@@ -178,7 +181,44 @@ class Problem:
         successorsSet: set[tuple[State, Action]] = {(s, a) for (s, a) in successorsSet if s.h <= self.altitude_limit}
 
         # --------------------------------------------------------------------------------------------
-        # Number 3, delete all those that collide with the terrain (mesh)
+        # Number 3, delete all those that don't respect the pitch limits (Optional)
+        # --------------------------------------------------------------------------------------------
+        if self.pitch_limits:
+            successorsSet = {(s, a) for (s, a) in successorsSet if
+                             self._TFR_PITCH_LIMIT_MIN <= s.pitch <= self._TFR_PITCH_LIMIT_MAX}
+
+        # --------------------------------------------------------------------------------------------
+        # Number 4.1, delete all those that collide with the terrain (mesh)
+        # --------------------------------------------------------------------------------------------
+        #Check the altitude of the mesh!
+        def heigh_of_mesh(s2: State):
+            """S1 will be treated as the origin, s2-s1 as the direction."""
+
+            origin = np.asarray([s2.x, s2.y, 0])
+            # d = s2 - s1
+            direction = np.asarray([0,0,1])
+
+            # print(f'mesh id {mesh_id}')
+
+            # t_hit is the distance to the intersection. The unit is defined by the length of the ray direction.
+
+
+            od_vector = np.ravel(
+                np.row_stack((origin, direction)))  # we need origins and the normalized direction
+            # inside the same array, inside the same row
+            # (check open3d documentation)
+
+            rays = o3d.core.Tensor([od_vector],
+                                   dtype=o3d.core.Dtype.Float32)
+            ans = self.scene.cast_rays(rays)
+            # print(ans)
+
+            return ans['t_hit'].numpy()[0]
+
+        successorsSet: set[tuple[State, Action]] = {(s, a) for (s, a) in successorsSet if s.h > heigh_of_mesh(s)}
+
+        # --------------------------------------------------------------------------------------------
+        # Number 4.2, delete all those that collide with the terrain (mesh)
         # --------------------------------------------------------------------------------------------
         # Create a ray with a direction
         def collides(s1: State, s2: State):
@@ -217,6 +257,7 @@ class Problem:
         return successorsSet
 
     def step_cost(self, n: Node, successor: State) -> float:
+        #TODO: TRY with math.floor
         return point3DDistance(n.state.x, n.state.y, n.state.h,
                                successor.x, successor.y, successor.h)
 
@@ -248,7 +289,7 @@ class NodePriorityQueue:
         if isinstance(n, Node):
             already_saved = False
             for p, savedNode in self._queue.queue:
-                if n.state.x == savedNode.state.x and n.state.y == savedNode.state.y and n.state.h == savedNode.state.h:
+                if n.state.x == savedNode.state.x and n.state.y == savedNode.state.y and n.state.h == savedNode.state.h and n.state.pitch == savedNode.state.pitch and n.state.yaw == savedNode.state.yaw:
                     already_saved = True
                     break
             if already_saved is False:

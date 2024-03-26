@@ -324,7 +324,11 @@ class LAPProblem(Problem):
             action is LAPAction.LEFT_TURN or
             action is LAPAction.RIGHT_TURN
         )
-        return 150 if isStraight or isSameAction or turnOrPullAfterStraight else 250
+        initial_path_cost = 150 if isStraight or isSameAction or turnOrPullAfterStraight else 250
+        #pilot_strain = 0 if action is LAPAction.STRAIGHT else 50
+        #pilot_strain = pilot_strain**2 if n.action == action else pilot_strain
+        #initial_path_cost += pilot_strain
+        return initial_path_cost
 
 
 class enqueueStrategyAstar(enqueueStrategy):

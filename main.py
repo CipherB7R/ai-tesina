@@ -33,11 +33,21 @@ if __name__ == '__main__':
     vis = o3d.visualization.Visualizer()
     vis.create_window()
 
+    points_selected[0, 0] = 27135
+    points_selected[0, 1] = 12645
+    points_selected[0, 2] = 250
+
+    points_selected[1, 0] = 29385
+    points_selected[1, 1] = 39105
+    points_selected[1, 2] = 404
+
     starting_point = (points_selected[0, :]).astype(int)
     starting_point[2] = starting_point[2] + 100  # let's give us 100m of altitude
 
     goal_point = (points_selected[1, :]).astype(int)
     goal_point[2] = goal_point[2] + 100  # let's give us 100m of altitude
+
+
 
     points = [
         starting_point,

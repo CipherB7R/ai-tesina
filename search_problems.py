@@ -56,7 +56,7 @@ class Problem(abc.ABC):
        pass
 
     @abc.abstractmethod
-    def step_cost(self, n: Node, successor: State) -> float:
+    def step_cost(self, n: Node, successor: State, action: Action) -> float:
         pass
 
 
@@ -112,7 +112,7 @@ def expand(n: Node, p: Problem) -> set[Node]:
             successor,
             action,
             n,
-            n.path_cost + p.step_cost(n, successor),
+            n.path_cost + p.step_cost(n, successor, action),
             n.depth + 1
         )
         successors.add(new_n)
@@ -140,15 +140,15 @@ class treeSearch:
 
             node: Node = self.fringe.removeFirst()  # Same as REMOVE-FIRST(q)
 
-            self.debugExpandedNode(node)
+            self.afterExpandedNode(node)
 
             if self.problem.goal_test(node.state):
                 print('Solution found!')
-                return node.solution().reverse()
+                return node.solution()
 
             self.fringe.enqueue(expand(node, self.problem))
 
-    def debugExpandedNode(self, node: Node):
+    def afterExpandedNode(self, node: Node):
         pass
 
 

@@ -60,7 +60,7 @@ if __name__ == '__main__':
     print('')
     starting_altitude = int(input(f'Please, give me the starting altitude (note that the point you selected is at {starting_point[2]}m): '))
     starting_pitch = int(input('Please, give me the starting pitch (degrees, [-90, 90] ): '))
-    starting_yaw = int(input('Please, give me the starting roll (degrees, [0, 360[ ): '))
+    starting_yaw = int(input('Please, give me the starting yaw (degrees, [0, 360[ ): '))
     altitude_limits = int(input('Please, give me the altitude limits: '))
     print('')
     problem = LAPProblem(mesh,

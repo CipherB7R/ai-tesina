@@ -1,6 +1,5 @@
-from search_algorythm import *
+from search_problem_lap import *
 import open3d as o3d
-import copy
 import numpy as np
 
 
@@ -60,12 +59,12 @@ if __name__ == '__main__':
 
     print(f'Start: {starting_point}, goal: {goal_point}')
 
-    problem = Problem(mesh,
-                      starting_point[0], starting_point[1], starting_point[2],
-                      goal_point[0], goal_point[1], goal_point[2],
-                      500, consider_corners=False)
+    problem = LAPProblem(mesh,
+                         LAPState(starting_point[0], starting_point[1], starting_point[2]),
+                         LAPState(goal_point[0], goal_point[1], goal_point[2]),
+                         500, consider_corners=False)
 
-    src = treeSearch(enqueueStrategyAstar(), problem, vis)
+    src = LAPtreeSearch(enqueueStrategyAstarDynamicWeighting(), problem, vis)
 
     sol = src.tree_search()
 

@@ -1,6 +1,4 @@
 # This is the low altitude search problem implementation
-import math
-
 import numpy as np
 import open3d as o3d
 from utils import *
@@ -8,25 +6,24 @@ from search_problems import *
 
 
 class LAPAction(Action):
-    STRAIGHT = 'STRAIGHT'
-    LEFT_TURN = 'LEFT TURN'
-    RIGHT_TURN = 'RIGHT TURN'
-    PULL_UP = 'PULL 4G'
-    PULL_DOWN = 'PULL -2G'
+    FORWARD = 'FORWARD'
+    BACKWARD = 'BACKWARD'
+    UP = 'UP'
+    DOWN = 'DOWN'
+    LEFT = 'LEFT'
+    RIGHT = 'RIGHT'
 
 
 class LAPState(State):
-    # Information about present position (X,Y,Z), plus flight vector (Pitch and yaw)
-    def __init__(self, x=0, y=0, h=0, pitch=0, yaw=0):
+    # Information about present position (X,Y,Z)
+    def __init__(self, x=0, y=0, h=0):
         super().__init__()
         self.x = x
         self.y = y
         self.h = h
-        self.pitch = pitch
-        self.yaw = yaw
 
     def __str__(self):
-        return f'({self.x, self.y, self.h}{self.pitch, self.yaw})'
+        return f'({self.x, self.y, self.h})'
 
 
 class LAPNode(Node):
@@ -43,9 +40,7 @@ class LAPNode(Node):
         # Overrides the superclass method...
         # Now a node is equal to another if it contains a state with equal coordinates and flight vector.
         return (point3DDistance(self.state.x, self.state.y, self.state.h, other.state.x, other.state.y,
-                                other.state.h) < 50 and
-                self.state.pitch == other.state.pitch and
-                abs(self.state.yaw - other.state.yaw) <= math.radians(50))
+                                other.state.h) < 50)
 
     def __str__(self):
         # Returns a string containing the action that lead to the current node,
@@ -55,23 +50,18 @@ class LAPNode(Node):
 """
 return (self.state.x == other.state.x and
                 self.state.y == other.state.y and
-                self.state.h == other.state.h and
-                self.state.pitch == other.state.pitch
-                and self.state.yaw == other.state.yaw)
+                self.state.h == other.state.h)
 """
 
 
 
 class LAPProblem(Problem):
-    """Class that models the F-16 low altitude ride problem"""
-    _TFR_PITCH_LIMIT_MAX = math.radians(40)  # 40 degrees in radians
-    _TFR_PITCH_LIMIT_MIN = math.radians(-20)  # MINUS 20 degrees in radians
+    """Class that models the AH-64 low altitude ride problem"""
 
     def __init__(self, terrain_mesh: o3d.geometry.TriangleMesh,
                  initial_state: LAPState,
                  goal_state: LAPState,
-                 altitude_limit,
-                 pitch_limits=True):
+                 altitude_limit):
         super().__init__(initial_state, goal_state)
 
         self.mesh = terrain_mesh
@@ -83,11 +73,11 @@ class LAPProblem(Problem):
         self.scene.add_triangles(self.mesh_legacy)
 
         self.altitude_limit = altitude_limit
-        self.goal_distance = 250  # meters, radius of the "goal circle"
-        self.pitch_limits = pitch_limits
+        self.goal_distance = 150
+        self.increment = 150
 
-        self.previous_action = LAPAction.STRAIGHT  # We enter the simulation by flying straight,
-        # already rolled, prepfared for the first turn
+        self.previous_action = LAPAction.FORWARD # We enter the simulation by flying straight,
+                                                  # already rolled, prepared for the first turn
 
     def goal_test(self, state: LAPState):
         # The goal test is defined as to check if the state is contained inside a circle of radius self.goal_distance
@@ -150,153 +140,77 @@ class LAPProblem(Problem):
             # print(f'No collision! Distance {ans["t_hit"].numpy()[0]} is superior to {increment}.')
             return False
 
-        def new_state(starting_state, displacement, deltaPitch, deltaYaw):
-            # takes in the starting state, the displacement and the delta angles... Gives back a new state with new position!
-            new_pitch = newMod((starting_state.pitch + deltaPitch), 2 * math.pi) if (
-                                                                                            starting_state.pitch + deltaPitch) >= 0 else (
-                    2 * math.pi + (starting_state.pitch + deltaPitch))
-            new_yaw = newMod((starting_state.yaw + deltaYaw), 2 * math.pi) if (
-                                                                                      starting_state.yaw + deltaYaw) >= 0 else (
-                    2 * math.pi + (starting_state.yaw + deltaYaw))
-
-            return LAPState(
-                x=math.floor(starting_state.x + displacement * math.cos(new_pitch) * math.cos(new_yaw)),
-                y=math.floor(starting_state.y + displacement * math.cos(new_pitch) * math.sin(new_yaw)),
-                h=math.floor(starting_state.h + displacement * math.sin(new_pitch)),
-                pitch=new_pitch,
-                yaw=new_yaw
-            )
-
-        # New empty successor set...
         successorsSet = set()
 
         # --------------------------------------------------------------------------------------------
         # Number 1, calculate a list of 5 possible displacements
         # --------------------------------------------------------------------------------------------
+        successorsSet.add(
+            (
+                LAPState(
+                    x=(state.x - self.increment),
+                    y=(state.y + 0),
+                    h=(state.h + 0)
+                ),
+                LAPAction.LEFT
+            )
+        )
 
-        # A) 100m displacement
-        state_100m_displacement = new_state(state, 100, 0, 0)
+        successorsSet.add(
+            (
+                LAPState(
+                    x=(state.x + 0),
+                    y=(state.y - self.increment),
+                    h=(state.h + 0)
+                ),
+                LAPAction.BACKWARD
+            )
+        )
 
-        # B) 100m displacement collision test
-        can_change_direction = not collides(state, state_100m_displacement,
-                                            100) and state_100m_displacement.h > heigh_of_mesh(state_100m_displacement)
+        successorsSet.add(
+            (
+                LAPState(
+                    x=(state.x + self.increment),
+                    y=(state.y + 0),
+                    h=(state.h + 0)
+                ),
+                LAPAction.RIGHT
+            )
+        )
 
-        deltaTheta = math.radians(15)
-        deltaThetaDown = math.radians(6.5)
+        successorsSet.add(
+            (
+                LAPState(
+                    x=(state.x + 0),
+                    y=(state.y + self.increment),
+                    h=(state.h + 0)
+                ),
+                LAPAction.FORWARD
+            )
+        )
 
-        if can_change_direction:
-            # 5 possible directions!
+        successorsSet.add(
+            (
+                LAPState(
+                    x=(state.x + 0),
+                    y=(state.y + 0),
+                    h=(state.h - 20)
+                ),
+                LAPAction.DOWN
+            )
+        )
 
-            # 1) we can go straight, whatever the previous action was (WITHOUT THE 100M displacement!).
-            temp_state = \
-                (
-                    new_state(state, 150, 0, 0),
-                    LAPAction.STRAIGHT
-                )
-            successorsSet.add(temp_state) if not collides(state, temp_state[0], 150) else None
+        successorsSet.add(
+            (
+                LAPState(
+                    x=(state.x + 0),
+                    y=(state.y + 0),
+                    h=(state.h + 20)
+                ),
+                LAPAction.UP
+            )
+        )
 
-            # 2) we can go up, and, in the case we were already going up (or straight) we can continue without THE 100M DISPLACEMENT
-            if self.previous_action == LAPAction.STRAIGHT or self.previous_action == LAPAction.PULL_UP:
-                temp_state = \
-                    (
-                        new_state(state, 150, deltaTheta, 0),
-                        LAPAction.PULL_UP
-                    )
-                successorsSet.add(temp_state) if not collides(state, temp_state[0], 150) else None
-            else:
-                temp_state = \
-                    (
-                        new_state(state_100m_displacement, 150, deltaTheta, 0),
-                        LAPAction.PULL_UP
-                    )
-                successorsSet.add(temp_state) if not collides(state_100m_displacement, temp_state[0], 150) else None
-
-            # 3) we can go down, and, in the case we were already going down (or straight) we can continue without THE 100M DISPLACEMENT
-            if self.previous_action == LAPAction.STRAIGHT or self.previous_action == LAPAction.PULL_DOWN:
-                temp_state = \
-                    (
-                        new_state(state, 150, -deltaThetaDown, 0),
-                        LAPAction.PULL_DOWN
-                    )
-                successorsSet.add(temp_state) if not collides(state, temp_state[0], 150) else None
-            else:
-                temp_state = \
-                    (
-                        new_state(state_100m_displacement, 150, -deltaThetaDown, 0),
-                        LAPAction.PULL_DOWN
-                    )
-                successorsSet.add(temp_state) if not collides(state_100m_displacement, temp_state[0], 150) else None
-            # 4) we can go left, and, in the case we were already going left (or straight) we can continue without THE 100M DISPLACEMENT
-            if self.previous_action == LAPAction.STRAIGHT or self.previous_action == LAPAction.LEFT_TURN:
-                temp_state = \
-                    (
-                        new_state(state, 150, 0, deltaTheta),
-                        LAPAction.LEFT_TURN
-                    )
-                successorsSet.add(temp_state) if not collides(state, temp_state[0], 150) else None
-            else:
-                temp_state = \
-                    (
-                        new_state(state_100m_displacement, 150, 0, deltaTheta),
-                        LAPAction.LEFT_TURN
-                    )
-                successorsSet.add(temp_state) if not collides(state_100m_displacement, temp_state[0], 150) else None
-
-            # 5) we can go right, and, in the case we were already going right (or straight) we can continue without THE 100M DISPLACEMENT
-            if self.previous_action == LAPAction.STRAIGHT or self.previous_action == LAPAction.RIGHT_TURN:
-                temp_state = \
-                    (
-                        new_state(state, 150, 0, -deltaTheta),
-                        LAPAction.RIGHT_TURN
-                    )
-                successorsSet.add(temp_state) if not collides(state, temp_state[0], 150) else None
-            else:
-                temp_state = \
-                    (
-                        new_state(state_100m_displacement, 150, 0, -deltaTheta),
-                        LAPAction.RIGHT_TURN
-                    )
-                successorsSet.add(temp_state) if not collides(state_100m_displacement, temp_state[0], 150) else None
-        else:
-            # 4 possible directions! (This time without the option to abruptly change course!)
-
-            # 1) we can't go straight, THE COLLISION CHECK FAILED FOR 100m, OF COURSE IT WILL FAIL FOR 150m TOO!
-
-            # 2) we can go up in the case we were already going up (or straight), hoping that we can advert the obstacle!
-            if self.previous_action == LAPAction.STRAIGHT or self.previous_action == LAPAction.PULL_UP:
-                temp_state = \
-                    (
-                        new_state(state, 150, deltaTheta, 0),
-                        LAPAction.PULL_UP
-                    )
-                successorsSet.add(temp_state) if not collides(state, temp_state[0], 150) else None
-
-            # 3) we can go down in the case we were already going down (or straight), hoping that we can advert the obstacle!
-            if self.previous_action == LAPAction.STRAIGHT or self.previous_action == LAPAction.PULL_DOWN:
-                temp_state = \
-                    (
-                        new_state(state, 150, -deltaThetaDown, 0),
-                        LAPAction.PULL_DOWN
-                    )
-                successorsSet.add(temp_state) if not collides(state, temp_state[0], 150) else None
-
-            # 4) we can go left in the case we were already going left (or straight), hoping that we can advert the obstacle!
-            if self.previous_action == LAPAction.STRAIGHT or self.previous_action == LAPAction.LEFT_TURN:
-                temp_state = \
-                    (
-                        new_state(state, 150, 0, deltaTheta),
-                        LAPAction.LEFT_TURN
-                    )
-                successorsSet.add(temp_state) if not collides(state, temp_state[0], 150) else None
-
-            # 5) we can go right in the case we were already going right (or straight) hoping that we can advert the obstacle!
-            if self.previous_action == LAPAction.STRAIGHT or self.previous_action == LAPAction.RIGHT_TURN:
-                temp_state = \
-                    (
-                        new_state(state, 150, 0, -deltaTheta),
-                        LAPAction.RIGHT_TURN
-                    )
-                successorsSet.add(temp_state) if not collides(state, temp_state[0], 150) else None
 
         # --------------------------------------------------------------------------------------------
         # Number 2, delete all those that don't respect the altitude limits
@@ -305,30 +219,22 @@ class LAPProblem(Problem):
                                                           s.h <= self.altitude_limit}
 
         # --------------------------------------------------------------------------------------------
-        # Number 3, delete all those that don't respect the pitch limits (Optional)
-        # --------------------------------------------------------------------------------------------
-        if self.pitch_limits:
-            successorsSet = {(s, a) for (s, a) in successorsSet if
-                             self._TFR_PITCH_LIMIT_MIN <= s.pitch <= self._TFR_PITCH_LIMIT_MAX}
-
-        # --------------------------------------------------------------------------------------------
         # Number 4.1, delete all those that collide with the terrain (mesh)
         # --------------------------------------------------------------------------------------------
         # Check the altitude of the mesh!
         successorsSet: set[tuple[LAPState, LAPAction]] = {(s, a) for (s, a) in successorsSet if s.h > heigh_of_mesh(s)}
 
+        # --------------------------------------------------------------------------------------------
+        # Number 4.2, delete all those that collide with the terrain (mesh)
+        # --------------------------------------------------------------------------------------------
+        # Create a ray with a direction
+        successorsSet: set[tuple[LAPState, LAPAction]] = {(s, a) for (s, a) in successorsSet if not collides(state, s, self.increment)}
+
         return successorsSet
 
     def step_cost(self, n: LAPNode, successor: LAPState, action: LAPAction) -> float:
-        isStraight = action == LAPAction.STRAIGHT
-        isSameAction = n.action == action
-        turnOrPullAfterStraight = n.action == LAPAction.STRAIGHT and (
-                action is LAPAction.PULL_UP or
-                action is LAPAction.PULL_DOWN or
-                action is LAPAction.LEFT_TURN or
-                action is LAPAction.RIGHT_TURN
-        )
-        return 150 if isStraight or isSameAction or turnOrPullAfterStraight else 250
+        isGoingUpOrDown = action == LAPAction.UP or action == LAPAction.DOWN
+        return 20 if isGoingUpOrDown else 150
 
 
 class enqueueStrategyAstar(enqueueStrategy):
@@ -415,9 +321,8 @@ class LAPtreeSearch(treeSearch):
         # print(f'Visiting newly generated node... Coordinates {node.state.x, node.state.y, node.state.h} with action
         # {node.action}')
         if node.action is None:
-            # First node has no action as by defaults of search_problems.treeSearch
-            # We need to assign it ourselves...
-            self.previous_action = LAPAction.STRAIGHT
+            self.previous_action = LAPAction.FORWARD # First node has no action as
+                                                      # by defaults of search_problems.treeSearch
         else:
             self.previous_action = node.action
 

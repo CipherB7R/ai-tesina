@@ -63,19 +63,15 @@ if __name__ == '__main__':
     print('')
     if TESTING_MODE:
         starting_altitude = 200
-        starting_pitch = 0
-        starting_yaw = 180
         altitude_limits = 500
     else:
         starting_altitude = int(input(f'Please, give me the starting altitude (note that the point you selected is at {starting_point[2]}m): '))
-        starting_pitch = int(input('Please, give me the starting pitch (degrees, [-90, 90] ): '))
-        starting_yaw = int(input('Please, give me the starting yaw (degrees, [0, 360[ ): '))
         altitude_limits = int(input('Please, give me the altitude limits: '))
     print('')
     problem = LAPProblem(mesh,
-                         LAPState(starting_point[0], starting_point[1], starting_altitude, math.radians(starting_pitch), math.radians(starting_yaw)),
+                         LAPState(starting_point[0], starting_point[1], starting_altitude),
                          LAPState(goal_point[0], goal_point[1], goal_point[2]),
-                         altitude_limits, pitch_limits=False)
+                         altitude_limits)
 
     src = LAPtreeSearch(enqueueStrategyGreedy(), problem, vis)
 

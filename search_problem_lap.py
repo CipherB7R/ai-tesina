@@ -77,8 +77,8 @@ class LAPProblem(Problem):
         self.increment = 250
         self.incrementUpDown = 50
 
-        self.previous_action = LAPAction.FORWARD # We enter the simulation by flying straight,
-                                                  # already rolled, prepared for the first turn
+        self.previous_action = LAPAction.FORWARD  # We enter the simulation by flying straight,
+        # already rolled, prepared for the first turn
 
     def goal_test(self, state: LAPState):
         # The goal test is defined as to check if the state is contained inside a circle of radius self.goal_distance
@@ -89,7 +89,6 @@ class LAPProblem(Problem):
 
     def successor_FN(self, state: LAPState) -> set[tuple[LAPState, LAPAction]]:
         def heigh_of_mesh(s2: LAPState):
-
             # We just need to check the height of the mesh, relative from the XY plane, at the (s2.x,s2.y) position
             origin = np.asarray([s2.x, s2.y, 0])
             direction = np.asarray(
@@ -212,7 +211,6 @@ class LAPProblem(Problem):
             )
         )
 
-
         # --------------------------------------------------------------------------------------------
         # Number 2, delete all those that don't respect the altitude limits
         # --------------------------------------------------------------------------------------------
@@ -229,7 +227,8 @@ class LAPProblem(Problem):
         # Number 4.2, delete all those that collide with the terrain (mesh)
         # --------------------------------------------------------------------------------------------
         # Create a ray with a direction
-        successorsSet: set[tuple[LAPState, LAPAction]] = {(s, a) for (s, a) in successorsSet if not collides(state, s, self.increment)}
+        successorsSet: set[tuple[LAPState, LAPAction]] = {(s, a) for (s, a) in successorsSet if
+                                                          not collides(state, s, self.increment)}
 
         return successorsSet
 
@@ -261,6 +260,23 @@ class enqueueStrategyGreedy(enqueueStrategy):
     def h(self, node: LAPNode, problem: LAPProblem):
         return point3DDistance(node.state.x, node.state.y, node.state.h,
                                problem.goal_state.x, problem.goal_state.y, problem.goal_state.h)
+
+
+class enqueueStrategyAstarStaticWeighting(enqueueStrategy):
+    # The static weighting approach multiplies the euristic by a fixed weight w. This makes
+    # sure that the nodes which are the closest to the solution gets a smaller heuristic cost:
+    # in other words, it incentives the selection of the nodes closest to the solution, regardless of their depth
+    WEIGHT = 1.5
+    def calculatePriority(self, node: LAPNode, problem: LAPProblem):
+        fVal = node.path_cost + enqueueStrategyAstarStaticWeighting.WEIGHT * self.h(node, problem)
+        # print(f'Calculate Priority: {fVal}')
+        return fVal
+
+    def h(self, node: LAPNode, problem: LAPProblem):
+        # heuristic: air line distance
+        return point3DDistance(node.state.x, node.state.y, node.state.h,
+                               problem.goal_state.x, problem.goal_state.y,
+                               problem.goal_state.h)
 
 
 class enqueueStrategyAstarDynamicWeighting(enqueueStrategy):
@@ -322,8 +338,8 @@ class LAPtreeSearch(treeSearch):
         # print(f'Visiting newly generated node... Coordinates {node.state.x, node.state.y, node.state.h} with action
         # {node.action}')
         if node.action is None:
-            self.previous_action = LAPAction.FORWARD # First node has no action as
-                                                      # by defaults of search_problems.treeSearch
+            self.previous_action = LAPAction.FORWARD  # First node has no action as
+            # by defaults of search_problems.treeSearch
         else:
             self.previous_action = node.action
 

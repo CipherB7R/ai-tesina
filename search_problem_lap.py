@@ -73,8 +73,9 @@ class LAPProblem(Problem):
         self.scene.add_triangles(self.mesh_legacy)
 
         self.altitude_limit = altitude_limit
-        self.goal_distance = 150
-        self.increment = 150
+        self.goal_distance = 250
+        self.increment = 250
+        self.incrementUpDown = 50
 
         self.previous_action = LAPAction.FORWARD # We enter the simulation by flying straight,
                                                   # already rolled, prepared for the first turn
@@ -194,7 +195,7 @@ class LAPProblem(Problem):
                 LAPState(
                     x=(state.x + 0),
                     y=(state.y + 0),
-                    h=(state.h - 20)
+                    h=(state.h - self.incrementUpDown)
                 ),
                 LAPAction.DOWN
             )
@@ -205,7 +206,7 @@ class LAPProblem(Problem):
                 LAPState(
                     x=(state.x + 0),
                     y=(state.y + 0),
-                    h=(state.h + 20)
+                    h=(state.h + self.incrementUpDown)
                 ),
                 LAPAction.UP
             )
@@ -234,7 +235,7 @@ class LAPProblem(Problem):
 
     def step_cost(self, n: LAPNode, successor: LAPState, action: LAPAction) -> float:
         isGoingUpOrDown = action == LAPAction.UP or action == LAPAction.DOWN
-        return 20 if isGoingUpOrDown else 150
+        return self.incrementUpDown if isGoingUpOrDown else self.increment
 
 
 class enqueueStrategyAstar(enqueueStrategy):
@@ -276,7 +277,7 @@ class enqueueStrategyAstarDynamicWeighting(enqueueStrategy):
                                                                                       problem.initial_state.h,
                                                                                       problem.goal_state.x,
                                                                                       problem.goal_state.y,
-                                                                                      problem.goal_state.h) / 250
+                                                                                      problem.goal_state.h) / problem.increment
 
         # to not assign negative weights, we need to stop when the node depth has surpassed the anticipated length
         w = 0 if node.depth > enqueueStrategyAstarDynamicWeighting.ANTICIPATED_LENGTH else \

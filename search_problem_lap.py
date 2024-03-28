@@ -39,8 +39,9 @@ class LAPNode(Node):
     def isEqual(self, other):
         # Overrides the superclass method...
         # Now a node is equal to another if it contains a state with equal coordinates and flight vector.
-        return (point3DDistance(self.state.x, self.state.y, self.state.h, other.state.x, other.state.y,
-                                other.state.h) < 50)
+        return (self.state.x == other.state.x and
+                self.state.y == other.state.y and
+                self.state.h == other.state.h)
 
     def __str__(self):
         # Returns a string containing the action that lead to the current node,
@@ -74,7 +75,7 @@ class LAPProblem(Problem):
 
         self.altitude_limit = altitude_limit
         self.goal_distance = 250
-        self.increment = 250
+        self.increment = 150
         self.incrementUpDown = 50
 
         self.previous_action = LAPAction.FORWARD  # We enter the simulation by flying straight,
@@ -82,6 +83,7 @@ class LAPProblem(Problem):
 
     def goal_test(self, state: LAPState):
         # The goal test is defined as to check if the state is contained inside a circle of radius self.goal_distance
+
         return math.sqrt(
             pow(state.x - self.goal_state.x, 2) +
             pow(state.y - self.goal_state.y, 2)

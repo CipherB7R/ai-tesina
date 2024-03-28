@@ -1,4 +1,6 @@
 # This is the low altitude search problem implementation
+import math
+
 import numpy as np
 import open3d as o3d
 from utils import *
@@ -30,6 +32,7 @@ class LAPState(State):
 class LAPNode(Node):
 
     def __init__(self, state: LAPState, action: LAPAction = None, parent=None, path_cost=0., depth=0):
+        self.state : LAPState = None
         super().__init__(state, action, parent, path_cost, depth)
 
     def __lt__(self, other):
@@ -39,16 +42,24 @@ class LAPNode(Node):
     def isEqual(self, other):
         # Overrides the superclass method...
         # Now a node is equal to another if it contains a state with equal coordinates and flight vector.
-        return (self.state.x == other.state.x and
-                self.state.y == other.state.y and
-                self.state.h == other.state.h and
-                self.state.pitch == other.state.pitch
-                and self.state.yaw == other.state.yaw)
+        return (point3DDistance(self.state.x, self.state.y, self.state.h, other.state.x, other.state.y,
+                                other.state.h) < 50 and
+                self.state.pitch == other.state.pitch and
+                abs(self.state.yaw - other.state.yaw) <= math.radians(50))
 
     def __str__(self):
         # Returns a string containing the action that lead to the current node,
         # plus the stringed view of the state stored in it
         return ('' if self.action is None else f'{self.action} --->') + str(self.state)
+
+"""
+return (self.state.x == other.state.x and
+                self.state.y == other.state.y and
+                self.state.h == other.state.h and
+                self.state.pitch == other.state.pitch
+                and self.state.yaw == other.state.yaw)
+"""
+
 
 
 class LAPProblem(Problem):
@@ -76,7 +87,7 @@ class LAPProblem(Problem):
         self.pitch_limits = pitch_limits
 
         self.previous_action = LAPAction.STRAIGHT  # We enter the simulation by flying straight,
-        # already rolled, prepared for the first turn
+        # already rolled, prepfared for the first turn
 
     def goal_test(self, state: LAPState):
         # The goal test is defined as to check if the state is contained inside a circle of radius self.goal_distance
@@ -142,10 +153,10 @@ class LAPProblem(Problem):
         def new_state(starting_state, displacement, deltaPitch, deltaYaw):
             # takes in the starting state, the displacement and the delta angles... Gives back a new state with new position!
             new_pitch = newMod((starting_state.pitch + deltaPitch), 2 * math.pi) if (
-                                                                                                starting_state.pitch + deltaPitch) >= 0 else (
+                                                                                            starting_state.pitch + deltaPitch) >= 0 else (
                     2 * math.pi + (starting_state.pitch + deltaPitch))
             new_yaw = newMod((starting_state.yaw + deltaYaw), 2 * math.pi) if (
-                                                                                          starting_state.yaw + deltaYaw) >= 0 else (
+                                                                                      starting_state.yaw + deltaYaw) >= 0 else (
                     2 * math.pi + (starting_state.yaw + deltaYaw))
 
             return LAPState(
@@ -383,6 +394,23 @@ class LAPtreeSearch(treeSearch):
         self.vis = vis
         self.statistics_maxNumberOfNodesSeen = 0
 
+    #Got to override it in order to make it work subclass types...
+    def expand(self, n: LAPNode, p: LAPProblem) -> set[LAPNode]:
+        successors = set()
+
+        for successor, action in p.successor_FN(n.state):
+            # print(f'Cost {n.path_cost + p.step_cost(n, successor)}')
+            new_n = LAPNode(
+                successor,
+                action,
+                n,
+                n.path_cost + p.step_cost(n, successor, action),
+                n.depth + 1
+            )
+            successors.add(new_n)
+
+        return successors
+
     def afterExpandedNode(self, node: Node):
         # print(f'Visiting newly generated node... Coordinates {node.state.x, node.state.y, node.state.h} with action
         # {node.action}')
@@ -393,8 +421,8 @@ class LAPtreeSearch(treeSearch):
         else:
             self.previous_action = node.action
 
-        if self.fringe._queue.qsize() > self.statistics_maxNumberOfNodesSeen:
-            self.statistics_maxNumberOfNodesSeen = self.fringe._queue.qsize()
+        if len(self.fringe.alreadySeenSet) > self.statistics_maxNumberOfNodesSeen:
+            self.statistics_maxNumberOfNodesSeen = len(self.fringe.alreadySeenSet)
 
         if node.parent is not None and self.vis is not None:
             # let's visualize the line...

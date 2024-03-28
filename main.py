@@ -77,7 +77,7 @@ if __name__ == '__main__':
                          LAPState(goal_point[0], goal_point[1], goal_point[2]),
                          altitude_limits, pitch_limits=False)
 
-    src = LAPtreeSearch(enqueueStrategyAstarDynamicWeighting(), problem, vis)
+    src = LAPtreeSearch(enqueueStrategyGreedy(), problem, vis)
 
     start_time = time.time()
     sol = src.tree_search()

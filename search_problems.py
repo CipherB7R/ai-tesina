@@ -76,6 +76,7 @@ class NodePriorityQueue:
 
     def __init__(self, problem: Problem, strategy: enqueueStrategy):
         self._queue = PriorityQueue()
+        self.alreadySeenSet = set()
         self._problem = problem
         self.strategy = strategy
 
@@ -87,13 +88,28 @@ class NodePriorityQueue:
     def enqueue(self, n: Union[set[Node], Node]):
         if isinstance(n, Node):
             already_saved = False
-            for p, savedNode in self._queue.queue:
+
+            priority_of_node = self.strategy.calculatePriority(n, self._problem)
+            n.priority = priority_of_node
+
+            for p, savedNode in self.alreadySeenSet:
                 if n.isEqual(savedNode):
+                    #print('already seen node')
+                    if priority_of_node < p:
+                        #print('Replaced a node with a better one')
+                        # Replace those that have higher priority with those with lower one...
+                        self.alreadySeenSet.remove((p, savedNode))
+                        self.alreadySeenSet.add((n.priority, n))
+                        if (p,savedNode) in self._queue.queue:
+                            self._queue.queue.remove((p, savedNode))
+                            self._queue.put((n.priority, n))
+                    # Ignore already seen nodes
                     already_saved = True
                     break
+
             if already_saved is False:
-                n.priority = self.strategy.calculatePriority(n, self._problem)
-                self._queue.put((self.strategy.calculatePriority(n, self._problem), n))
+                self._queue.put((n.priority, n))
+                self.alreadySeenSet.add((n.priority, n))
 
         else:
             for e in n:
@@ -103,21 +119,6 @@ class NodePriorityQueue:
         return self._queue.empty()
 
 
-def expand(n: Node, p: Problem) -> set[Node]:
-    successors = set()
-
-    for successor, action in p.successor_FN(n.state):
-        #print(f'Cost {n.path_cost + p.step_cost(n, successor)}')
-        new_n = Node(
-            successor,
-            action,
-            n,
-            n.path_cost + p.step_cost(n, successor, action),
-            n.depth + 1
-        )
-        successors.add(new_n)
-
-    return successors
 
 
 class treeSearch:
@@ -146,7 +147,23 @@ class treeSearch:
                 print('Solution found!')
                 return node.solution()
 
-            self.fringe.enqueue(expand(node, self.problem))
+            self.fringe.enqueue(self.expand(node, self.problem))
+
+    def expand(self, n: Node, p: Problem) -> set[Node]:
+        successors = set()
+
+        for successor, action in p.successor_FN(n.state):
+            # print(f'Cost {n.path_cost + p.step_cost(n, successor)}')
+            new_n = Node(
+                successor,
+                action,
+                n,
+                n.path_cost + p.step_cost(n, successor, action),
+                n.depth + 1
+            )
+            successors.add(new_n)
+
+        return successors
 
     def afterExpandedNode(self, node: Node):
         pass

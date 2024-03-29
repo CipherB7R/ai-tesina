@@ -6,6 +6,13 @@ import open3d as o3d
 from utils import *
 from search_problems import *
 
+_GOAL_DISTANCE = 250
+_PDT = 50
+_EQUAL_YAW_THRESHOLD = 50 # Degrees
+
+
+_DISPLACEMENT_TURN = 150
+_DISPLACEMENT_STRAIGHT_FOR_TURN = 100
 
 class LAPAction(Action):
     STRAIGHT = 'STRAIGHT'
@@ -43,9 +50,9 @@ class LAPNode(Node):
         # Overrides the superclass method...
         # Now a node is equal to another if it contains a state with equal coordinates and flight vector.
         return (point3DDistance(self.state.x, self.state.y, self.state.h, other.state.x, other.state.y,
-                                other.state.h) < 50 and
+                                other.state.h) < _PDT and
                 self.state.pitch == other.state.pitch and
-                abs(self.state.yaw - other.state.yaw) <= math.radians(50))
+                abs(self.state.yaw - other.state.yaw) <= math.radians(_EQUAL_YAW_THRESHOLD))
 
     def __str__(self):
         # Returns a string containing the action that lead to the current node,
@@ -83,7 +90,7 @@ class LAPProblem(Problem):
         self.scene.add_triangles(self.mesh_legacy)
 
         self.altitude_limit = altitude_limit
-        self.goal_distance = 250  # meters, radius of the "goal circle"
+        self.goal_distance = _GOAL_DISTANCE  # meters, radius of the "goal circle"
         self.pitch_limits = pitch_limits
 
         self.previous_action = LAPAction.STRAIGHT  # We enter the simulation by flying straight,
@@ -175,11 +182,11 @@ class LAPProblem(Problem):
         # --------------------------------------------------------------------------------------------
 
         # A) 100m displacement
-        state_100m_displacement = new_state(state, 100, 0, 0)
+        state_100m_displacement = new_state(state, _DISPLACEMENT_STRAIGHT_FOR_TURN, 0, 0)
 
         # B) 100m displacement collision test
         can_change_direction = not collides(state, state_100m_displacement,
-                                            100) and state_100m_displacement.h > heigh_of_mesh(state_100m_displacement)
+                                            _DISPLACEMENT_STRAIGHT_FOR_TURN) and state_100m_displacement.h > heigh_of_mesh(state_100m_displacement)
 
         deltaTheta = math.radians(15)
         deltaThetaDown = math.radians(6.5)
@@ -190,73 +197,73 @@ class LAPProblem(Problem):
             # 1) we can go straight, whatever the previous action was (WITHOUT THE 100M displacement!).
             temp_state = \
                 (
-                    new_state(state, 150, 0, 0),
+                    new_state(state, _DISPLACEMENT_TURN, 0, 0),
                     LAPAction.STRAIGHT
                 )
-            successorsSet.add(temp_state) if not collides(state, temp_state[0], 150) else None
+            successorsSet.add(temp_state) if not collides(state, temp_state[0], _DISPLACEMENT_TURN) else None
 
             # 2) we can go up, and, in the case we were already going up (or straight) we can continue without THE 100M DISPLACEMENT
             if self.previous_action == LAPAction.STRAIGHT or self.previous_action == LAPAction.PULL_UP:
                 temp_state = \
                     (
-                        new_state(state, 150, deltaTheta, 0),
+                        new_state(state, _DISPLACEMENT_TURN, deltaTheta, 0),
                         LAPAction.PULL_UP
                     )
-                successorsSet.add(temp_state) if not collides(state, temp_state[0], 150) else None
+                successorsSet.add(temp_state) if not collides(state, temp_state[0], _DISPLACEMENT_TURN) else None
             else:
                 temp_state = \
                     (
-                        new_state(state_100m_displacement, 150, deltaTheta, 0),
+                        new_state(state_100m_displacement, _DISPLACEMENT_TURN, deltaTheta, 0),
                         LAPAction.PULL_UP
                     )
-                successorsSet.add(temp_state) if not collides(state_100m_displacement, temp_state[0], 150) else None
+                successorsSet.add(temp_state) if not collides(state_100m_displacement, temp_state[0], _DISPLACEMENT_TURN) else None
 
             # 3) we can go down, and, in the case we were already going down (or straight) we can continue without THE 100M DISPLACEMENT
             if self.previous_action == LAPAction.STRAIGHT or self.previous_action == LAPAction.PULL_DOWN:
                 temp_state = \
                     (
-                        new_state(state, 150, -deltaThetaDown, 0),
+                        new_state(state, _DISPLACEMENT_TURN, -deltaThetaDown, 0),
                         LAPAction.PULL_DOWN
                     )
-                successorsSet.add(temp_state) if not collides(state, temp_state[0], 150) else None
+                successorsSet.add(temp_state) if not collides(state, temp_state[0], _DISPLACEMENT_TURN) else None
             else:
                 temp_state = \
                     (
-                        new_state(state_100m_displacement, 150, -deltaThetaDown, 0),
+                        new_state(state_100m_displacement, _DISPLACEMENT_TURN, -deltaThetaDown, 0),
                         LAPAction.PULL_DOWN
                     )
-                successorsSet.add(temp_state) if not collides(state_100m_displacement, temp_state[0], 150) else None
+                successorsSet.add(temp_state) if not collides(state_100m_displacement, temp_state[0], _DISPLACEMENT_TURN) else None
             # 4) we can go left, and, in the case we were already going left (or straight) we can continue without THE 100M DISPLACEMENT
             if self.previous_action == LAPAction.STRAIGHT or self.previous_action == LAPAction.LEFT_TURN:
                 temp_state = \
                     (
-                        new_state(state, 150, 0, deltaTheta),
+                        new_state(state, _DISPLACEMENT_TURN, 0, deltaTheta),
                         LAPAction.LEFT_TURN
                     )
-                successorsSet.add(temp_state) if not collides(state, temp_state[0], 150) else None
+                successorsSet.add(temp_state) if not collides(state, temp_state[0], _DISPLACEMENT_TURN) else None
             else:
                 temp_state = \
                     (
-                        new_state(state_100m_displacement, 150, 0, deltaTheta),
+                        new_state(state_100m_displacement, _DISPLACEMENT_TURN, 0, deltaTheta),
                         LAPAction.LEFT_TURN
                     )
-                successorsSet.add(temp_state) if not collides(state_100m_displacement, temp_state[0], 150) else None
+                successorsSet.add(temp_state) if not collides(state_100m_displacement, temp_state[0], _DISPLACEMENT_TURN) else None
 
             # 5) we can go right, and, in the case we were already going right (or straight) we can continue without THE 100M DISPLACEMENT
             if self.previous_action == LAPAction.STRAIGHT or self.previous_action == LAPAction.RIGHT_TURN:
                 temp_state = \
                     (
-                        new_state(state, 150, 0, -deltaTheta),
+                        new_state(state, _DISPLACEMENT_TURN, 0, -deltaTheta),
                         LAPAction.RIGHT_TURN
                     )
-                successorsSet.add(temp_state) if not collides(state, temp_state[0], 150) else None
+                successorsSet.add(temp_state) if not collides(state, temp_state[0], _DISPLACEMENT_TURN) else None
             else:
                 temp_state = \
                     (
-                        new_state(state_100m_displacement, 150, 0, -deltaTheta),
+                        new_state(state_100m_displacement, _DISPLACEMENT_TURN, 0, -deltaTheta),
                         LAPAction.RIGHT_TURN
                     )
-                successorsSet.add(temp_state) if not collides(state_100m_displacement, temp_state[0], 150) else None
+                successorsSet.add(temp_state) if not collides(state_100m_displacement, temp_state[0], _DISPLACEMENT_TURN) else None
         else:
             # 4 possible directions! (This time without the option to abruptly change course!)
 
@@ -266,37 +273,37 @@ class LAPProblem(Problem):
             if self.previous_action == LAPAction.STRAIGHT or self.previous_action == LAPAction.PULL_UP:
                 temp_state = \
                     (
-                        new_state(state, 150, deltaTheta, 0),
+                        new_state(state, _DISPLACEMENT_TURN, deltaTheta, 0),
                         LAPAction.PULL_UP
                     )
-                successorsSet.add(temp_state) if not collides(state, temp_state[0], 150) else None
+                successorsSet.add(temp_state) if not collides(state, temp_state[0], _DISPLACEMENT_TURN) else None
 
             # 3) we can go down in the case we were already going down (or straight), hoping that we can advert the obstacle!
             if self.previous_action == LAPAction.STRAIGHT or self.previous_action == LAPAction.PULL_DOWN:
                 temp_state = \
                     (
-                        new_state(state, 150, -deltaThetaDown, 0),
+                        new_state(state, _DISPLACEMENT_TURN, -deltaThetaDown, 0),
                         LAPAction.PULL_DOWN
                     )
-                successorsSet.add(temp_state) if not collides(state, temp_state[0], 150) else None
+                successorsSet.add(temp_state) if not collides(state, temp_state[0], _DISPLACEMENT_TURN) else None
 
             # 4) we can go left in the case we were already going left (or straight), hoping that we can advert the obstacle!
             if self.previous_action == LAPAction.STRAIGHT or self.previous_action == LAPAction.LEFT_TURN:
                 temp_state = \
                     (
-                        new_state(state, 150, 0, deltaTheta),
+                        new_state(state, _DISPLACEMENT_TURN, 0, deltaTheta),
                         LAPAction.LEFT_TURN
                     )
-                successorsSet.add(temp_state) if not collides(state, temp_state[0], 150) else None
+                successorsSet.add(temp_state) if not collides(state, temp_state[0], _DISPLACEMENT_TURN) else None
 
             # 5) we can go right in the case we were already going right (or straight) hoping that we can advert the obstacle!
             if self.previous_action == LAPAction.STRAIGHT or self.previous_action == LAPAction.RIGHT_TURN:
                 temp_state = \
                     (
-                        new_state(state, 150, 0, -deltaTheta),
+                        new_state(state, _DISPLACEMENT_TURN, 0, -deltaTheta),
                         LAPAction.RIGHT_TURN
                     )
-                successorsSet.add(temp_state) if not collides(state, temp_state[0], 150) else None
+                successorsSet.add(temp_state) if not collides(state, temp_state[0], _DISPLACEMENT_TURN) else None
 
         # --------------------------------------------------------------------------------------------
         # Number 2, delete all those that don't respect the altitude limits
@@ -328,7 +335,7 @@ class LAPProblem(Problem):
                 action is LAPAction.LEFT_TURN or
                 action is LAPAction.RIGHT_TURN
         )
-        return 150 if isStraight or isSameAction or turnOrPullAfterStraight else 250
+        return _DISPLACEMENT_TURN if isStraight or isSameAction or turnOrPullAfterStraight else _DISPLACEMENT_TURN + _DISPLACEMENT_STRAIGHT_FOR_TURN
 
 
 class enqueueStrategyAstar(enqueueStrategy):
@@ -370,7 +377,7 @@ class enqueueStrategyAstarDynamicWeighting(enqueueStrategy):
                                                                                       problem.initial_state.h,
                                                                                       problem.goal_state.x,
                                                                                       problem.goal_state.y,
-                                                                                      problem.goal_state.h) / 250
+                                                                                      problem.goal_state.h) / (_DISPLACEMENT_TURN + _DISPLACEMENT_STRAIGHT_FOR_TURN)
 
         # to not assign negative weights, we need to stop when the node depth has surpassed the anticipated length
         w = 0 if node.depth > enqueueStrategyAstarDynamicWeighting.ANTICIPATED_LENGTH else \

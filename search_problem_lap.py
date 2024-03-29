@@ -4,6 +4,10 @@ import open3d as o3d
 from utils import *
 from search_problems import *
 
+_GOAL_DISTANCE = 250
+_INCREMENT = 150
+_INCREMENT_UP_DOWN = 50
+
 
 class LAPAction(Action):
     FORWARD = 'FORWARD'
@@ -74,9 +78,9 @@ class LAPProblem(Problem):
         self.scene.add_triangles(self.mesh_legacy)
 
         self.altitude_limit = altitude_limit
-        self.goal_distance = 250
-        self.increment = 150
-        self.incrementUpDown = 50
+        self.goal_distance = _GOAL_DISTANCE
+        self.increment = _INCREMENT
+        self.incrementUpDown = _INCREMENT_UP_DOWN
 
         self.previous_action = LAPAction.FORWARD  # We enter the simulation by flying straight,
         # already rolled, prepared for the first turn
